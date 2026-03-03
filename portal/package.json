@@ -1,0 +1,16 @@
+{
+    "name": "peerpar-portal",
+    "version": "0.1.0",
+    "private": true,
+    "description": "PeerPar Protocol — Public verification portal (React + Vite)",
+    "scripts": {
+        "start": "vite",
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+    },
+    "dependencies": {},
+    "devDependencies": {
+        "vite": "^5.2.0"
+    }
+}

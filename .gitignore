@@ -1,0 +1,48 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment secrets — NEVER commit these
+.env
+.env.local
+.env.*.local
+relayer/.env
+contracts/.env
+
+# Build outputs
+dist/
+build/
+out/
+.expo/
+*.js.map
+
+# Hardhat artifacts
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+
+# Expo / React Native
+app/.expo/
+app/android/
+app/ios/
+*.xcworkspace
+*.xcodeproj
+Pods/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+logs/

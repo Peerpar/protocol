@@ -1,0 +1,20 @@
+{
+    "name": "peerpar-protocol",
+    "version": "0.1.0",
+    "private": true,
+    "description": "Mobile-first media authenticity — cryptographic proof-of-existence for photos and videos",
+    "workspaces": [
+        "relayer",
+        "portal"
+    ],
+    "scripts": {
+        "test:contracts": "cd contracts && npx hardhat test",
+        "test:relayer": "cd relayer && npm test",
+        "test:app": "cd app && npm test",
+        "test:all": "npm run test:contracts && npm run test:relayer && npm run test:app",
+        "start:relayer": "cd relayer && node src/server.js",
+        "start:portal": "cd portal && npm start",
+        "start:app": "cd app && npx expo start"
+    },
+    "devDependencies": {}
+}

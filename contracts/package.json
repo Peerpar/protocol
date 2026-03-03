@@ -1,0 +1,23 @@
+{
+    "name": "peerpar-contracts",
+    "version": "0.1.0",
+    "private": true,
+    "description": "PeerPar Protocol — Solidity smart contracts for proof-of-existence anchoring",
+    "scripts": {
+        "compile": "hardhat compile",
+        "test": "hardhat test",
+        "test:gas": "REPORT_GAS=true hardhat test",
+        "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+        "deploy:baseSepolia": "hardhat run scripts/deploy.js --network baseSepolia",
+        "deploy:base": "hardhat run scripts/deploy.js --network base",
+        "deploy:polygonZkEvmTestnet": "hardhat run scripts/deploy.js --network polygonZkEvmTestnet",
+        "deploy:polygonZkEvm": "hardhat run scripts/deploy.js --network polygonZkEvm",
+        "node": "hardhat node",
+        "clean": "hardhat clean"
+    },
+    "devDependencies": {
+        "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+        "dotenv": "^16.6.1",
+        "hardhat": "^2.22.0"
+    }
+}
