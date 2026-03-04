@@ -36,8 +36,8 @@ describe("ProofRegistry", function () {
             expect(await registry.owner()).to.equal(owner.address);
         });
 
-        it("sets the initial active relayer correctly", async function () {
-            expect(await registry.activeRelayer()).to.equal(relayer.address);
+        it("sets the initial relayer correctly", async function () {
+            expect(await registry.relayer()).to.equal(relayer.address);
         });
 
         it("reverts if deployed with zero relayer address", async function () {
@@ -128,7 +128,7 @@ describe("ProofRegistry", function () {
                 .to.emit(registry, "RelayerUpdated")
                 .withArgs(relayer.address, newRelayer.address);
 
-            expect(await registry.activeRelayer()).to.equal(newRelayer.address);
+            expect(await registry.relayer()).to.equal(newRelayer.address);
         });
 
         it("new relayer can anchor after update", async function () {
@@ -154,10 +154,10 @@ describe("ProofRegistry", function () {
         });
 
         it("non-owner cannot update relayer", async function () {
-            await expect(
-                registry.connect(attacker).setRelayer(attacker.address)
-            ).to.be.revertedWithCustomError(registry, "NotRelayer");
-        });
+    await expect(
+        registry.connect(attacker).setRelayer(attacker.address)
+    ).to.be.revertedWithCustomError(registry, "NotOwner");
+});
 
         it("reverts setting relayer to zero address", async function () {
             await expect(
