@@ -53,6 +53,14 @@ async function processAnchorRequest(body, config) {
         }
     }
 
+    // Validate ntpTimestamp is a safe integer
+    const ts = Number(body.ntpTimestamp);
+    if (!Number.isInteger(ts) || ts < 1000000000 || ts > 9999999999) {
+        throw Object.assign(
+            new Error("ntpTimestamp must be a valid Unix timestamp in seconds"),
+            { statusCode: 400 }
+        );
+    }
     // ── Step 2: Validate merkleRoot format ────────────────────────────────────
     // WHY: ethers.isHexString(value, 32) checks it's exactly 32 bytes hex.
     //      A malformed root would cause a contract revert and waste gas.

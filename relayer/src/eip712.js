@@ -107,7 +107,7 @@ function encodeMetadata(payload) {
             payload.deviceModel,
             payload.osVersion,
             payload.appVersion,
-            payload.ntpOffsetMs,
+            Number(payload.ntpOffsetMs),
         ]
     );
 }
