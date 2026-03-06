@@ -90,6 +90,9 @@ async function processAnchorRequest(body, config) {
         appVersion: body.appVersion,
     };
 
+    console.log("[relayer] Verifying payload:", JSON.stringify(payload, (k, v) => typeof v === 'bigint' ? v.toString() : v));
+    console.log("[relayer] Signature:", body.signature);
+    console.log("[relayer] Expected:", body.deviceAddress);
     const { valid, recovered } = verifyPayload(
         domain, payload, body.signature, body.deviceAddress
     );
