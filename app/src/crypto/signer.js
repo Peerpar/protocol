@@ -31,8 +31,8 @@
  * is not persisted in plain text anywhere.
  */
 
-import * as SecureStore from "expo-secure-store";
 import { ethers } from "ethers";
+import * as SecureStore from "expo-secure-store";
 
 const DEVICE_KEY_STORE_KEY = "peerpar_device_private_key";
 const DEVICE_ADDR_STORE_KEY = "peerpar_device_address";
@@ -94,7 +94,6 @@ async function getOrCreateDeviceWallet() {
 
         console.log("[signer] New device keypair generated:", wallet.address);
     }
-
     return new ethers.Wallet(privateKey);
 }
 
@@ -115,9 +114,7 @@ export async function signProof(payload, chainId, contractAddress) {
         chainId: Number(chainId),
         verifyingContract: contractAddress,
     };
-
     const signature = await wallet.signTypedData(domain, PROOF_TYPES, payload);
-
     return { signature, deviceAddress: wallet.address };
 }
 

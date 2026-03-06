@@ -22,11 +22,11 @@ import {
     Text,
     TouchableOpacity,
     StyleSheet,
-    Platform,
     ActivityIndicator,
+    Platform,
     Alert,
 } from "react-native";
-import { Camera, CameraType } from "expo-camera";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import * as MediaLibrary from "expo-media-library";
 import * as Location from "expo-location";
 import * as Device from "expo-device";
@@ -53,18 +53,27 @@ export default function CameraScreen({ navigation }) {
     const [cameraPermission, setCameraPermission] = useState(null);
     const [mediaPermission, setMediaPermission] = useState(null);
     const [locationPermission, setLocationPermission] = useState(null);
-    const [facing, setFacing] = useState(CameraType.back);
+    const [facing, setFacing] = useState("back");
     const [isCapturing, setIsCapturing] = useState(false);
     const [captureStep, setCaptureStep] = useState("");
 
+    const [camPermission, requestCamPermission] = useCameraPermissions();
+
     useEffect(() => {
         (async () => {
-            const { status: cam } = await Camera.requestCameraPermissionsAsync();
-            const { status: media } = await MediaLibrary.requestPermissionsAsync();
-            const { status: loc } = await Location.requestForegroundPermissionsAsync();
-            setCameraPermission(cam);
-            setMediaPermission(media);
-            setLocationPermission(loc);
+            await requestCamPermission();
+            try {
+                const { status: media } = await MediaLibrary.requestPermissionsAsync();
+                setMediaPermission(media);
+            } catch {
+                setMediaPermission("denied");
+            }
+            try {
+                const { status: loc } = await Location.requestForegroundPermissionsAsync();
+                setLocationPermission(loc);
+            } catch {
+                setLocationPermission("denied");
+            }
         })();
     }, []);
 
@@ -134,6 +143,7 @@ export default function CameraScreen({ navigation }) {
             // ── STEP 6: EIP-712 Sign ──────────────────────────────────────────────
             setCaptureStep("Signing…");
             const payload = {
+                ...metadata,
                 merkleRoot,
                 sha256Hex,
                 pHashHex,
@@ -142,7 +152,6 @@ export default function CameraScreen({ navigation }) {
                 gpsLat: BigInt(gpsLat ?? 0),
                 gpsLon: BigInt(gpsLon ?? 0),
                 gpsAcc: BigInt(gpsAcc ?? 0),
-                ...metadata,
             };
             const { signature, deviceAddress } = await signProof(
                 payload,
@@ -199,10 +208,10 @@ export default function CameraScreen({ navigation }) {
         }
     }
 
-    if (cameraPermission === null) {
+    if (!camPermission) {
         return <View style={styles.center}><ActivityIndicator /></View>;
     }
-    if (cameraPermission !== "granted") {
+    if (!camPermission.granted) {
         return (
             <View style={styles.center}>
                 <Text style={styles.permissionText}>Camera permission is required.</Text>
@@ -212,7 +221,7 @@ export default function CameraScreen({ navigation }) {
 
     return (
         <View style={styles.container}>
-            <Camera ref={cameraRef} style={styles.camera} type={facing}>
+            <CameraView ref={cameraRef} style={styles.camera} facing={facing}>
                 {/* ── Top disclaimer banner ── */}
                 <View style={styles.disclaimerBanner}>
                     <Text style={styles.disclaimerText}>{DISCLAIMER_TEXT}</Text>
@@ -232,7 +241,7 @@ export default function CameraScreen({ navigation }) {
                         style={styles.flipButton}
                         onPress={() =>
                             setFacing((f) =>
-                                f === CameraType.back ? CameraType.front : CameraType.back
+                                f === "back" ? "front" : "back"
                             )
                         }
                     >
@@ -251,7 +260,7 @@ export default function CameraScreen({ navigation }) {
 
                     <View style={{ width: 60 }} />
                 </View>
-            </Camera>
+            </CameraView>
         </View>
     );
 }

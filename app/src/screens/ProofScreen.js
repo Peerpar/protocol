@@ -15,12 +15,12 @@ import {
     Text,
     ScrollView,
     StyleSheet,
-    Clipboard,
     TouchableOpacity,
     Share,
     ActivityIndicator,
+    Platform,
 } from "react-native";
-import QRCode from "react-native-qrcode-svg";
+// import QRCode from "react-native-qrcode-svg"; // ToDo: re-enable after native build (also line 170 QRCode value={verifyUrl})
 import { getProofById } from "../db/database";
 
 const PORTAL_BASE_URL =
@@ -168,7 +168,7 @@ export default function ProofScreen({ route }) {
                 <Text style={styles.sectionTitle}>Verification Link</Text>
                 <Text style={styles.verifyUrl} numberOfLines={2}>{verifyUrl}</Text>
                 <View style={styles.qrContainer}>
-                    <QRCode value={verifyUrl} size={200} backgroundColor="#fff" />
+                    {/* <QRCode value={verifyUrl} size={200} backgroundColor="#fff" /> */}
                 </View>
                 <Text style={styles.qrCaption}>
                     Scan to verify this proof independently at the PeerPar portal.
@@ -220,7 +220,7 @@ function StatusBadge({ status, ntpReliable }) {
 function FieldRow({ label, value, copyable }) {
     return (
         <TouchableOpacity
-            onPress={() => copyable && Clipboard.setString(value)}
+            onPress={() => copyable && Share.share({ message: value })}
             activeOpacity={copyable ? 0.6 : 1}
             style={styles.fieldRow}
         >
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     pendingText: { color: "#94A3B8", fontSize: 13, lineHeight: 20 },
 
     qrContainer: { alignItems: "center", marginVertical: 16 },
-    verifyUrl: { color: "#60A5FA", fontSize: 11, fontFamily: "monospace", marginBottom: 8 },
+    verifyUrl: { color: "#60A5FA", fontSize: 11, fontFamily: undefined, marginBottom: 8 },
     qrCaption: { color: "#64748B", fontSize: 11, lineHeight: 16, textAlign: "center" },
 
     shareButton: {
