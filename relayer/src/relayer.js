@@ -90,22 +90,9 @@ async function processAnchorRequest(body, config) {
         appVersion: body.appVersion,
     };
 
-    console.log("[relayer] Verifying payload:", JSON.stringify(payload, (k, v) => typeof v === 'bigint' ? v.toString() : v));
-    console.log("[relayer] Signature:", body.signature);
-    console.log("[relayer] Expected:", effectiveDeviceAddress);
-    console.log("[relayer] Payload types:", {
-        ntpTimestamp: typeof payload.ntpTimestamp,
-        ntpOffsetMs: typeof payload.ntpOffsetMs,
-        gpsLat: typeof payload.gpsLat,
-        gpsLon: typeof payload.gpsLon,
-        gpsAcc: typeof payload.gpsAcc,
-    });
-    const { valid, recovered } = verifyPayload(
-        domain, payload, body.signature, effectiveDeviceAddress
+    const { recovered } = verifyPayload(
+        domain, payload, body.signature, body.deviceAddress
     );
-
-    // For v0.1.0 PoC: use recovered address as the authoritative signer
-    // The device-reported address is informational only
     const effectiveDeviceAddress = recovered;
     console.log(`[relayer] Signer recovered: ${recovered} (device reported: ${body.deviceAddress})`);
 
