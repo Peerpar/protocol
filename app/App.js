@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import HistoryScreen from "./src/screens/HistoryScreen";
 import CameraScreen from "./src/screens/CameraScreen";
 import ProofScreen from "./src/screens/ProofScreen";
+import SettingsScreen from "./src/screens/SettingsScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -24,6 +25,7 @@ export default function App() {
         <Tab.Screen name="Record" component={CameraScreen} />
         <Tab.Screen name="History" component={HistoryScreen} />
         <Tab.Screen name="Proof" component={ProofScreen} />
+        <Tab.Screen name="Settings" component={SettingsScreen} />
       </Tab.Navigator>
     </NavigationContainer>
   );
