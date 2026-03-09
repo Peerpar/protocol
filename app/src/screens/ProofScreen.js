@@ -16,9 +16,9 @@ import {
     ScrollView,
     StyleSheet,
     TouchableOpacity,
-    Share,
     ActivityIndicator,
     Platform,
+    Alert,
 } from "react-native";
 // import QRCode from "react-native-qrcode-svg"; // ToDo: re-enable after native build (also line 170 QRCode value={verifyUrl})
 import { getProofById } from "../db/database";
@@ -53,6 +53,7 @@ export default function ProofScreen({ route }) {
     const { proofId } = route.params;
     const [proof, setProof] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isPublishing, setIsPublishing] = useState(false);
 
     useEffect(() => {
         let interval;
@@ -87,6 +88,72 @@ export default function ProofScreen({ route }) {
         : null;
 
     const captureDate = new Date(proof.ntp_timestamp * 1000).toLocaleString();
+
+    const handlePublishToSocial = async () => {
+        if (!proof.tx_hash) {
+            Alert.alert("Pending", "Wait for the blockchain anchor to confirm before publishing.");
+            return;
+        }
+
+        setIsPublishing(true);
+        try {
+            const formData = new FormData();
+
+            // Append file
+            const fileUri = proof.media_uri;
+            const filename = fileUri.split('/').pop();
+            const isVideo = filename.endsWith('.mp4') || filename.endsWith('.mov');
+            const isAudio = filename.endsWith('.mp3') || filename.endsWith('.m4a') || filename.endsWith('.wav');
+
+            let mimeType = 'image/jpeg';
+            let publishType = 'photo';
+            if (isVideo) {
+                mimeType = 'video/mp4';
+                publishType = 'clip';
+            } else if (isAudio) {
+                mimeType = 'audio/m4a';
+                publishType = 'audio';
+            }
+
+            formData.append('file', {
+                uri: fileUri,
+                name: filename,
+                type: mimeType,
+            });
+
+            formData.append('title', 'Certified Capture');
+            formData.append('description', 'Auto-shared from PeerPar Mobile.');
+            formData.append('type', publishType);
+            formData.append('txHash', proof.tx_hash);
+            formData.append('certifierKey', proof.device_address);
+
+            // Fetch to local network IP or your actual staging server
+            // Ensure process.env.EXPO_PUBLIC_SOCIAL_API_URL is set in the app
+            const apiUrl = process.env.EXPO_PUBLIC_SOCIAL_API_URL || "http://192.168.1.100:3000/api/publish";
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    // Match the relayer secret configured on the web side.
+                    // Ideally handled via proper auth headers.
+                    'Authorization': `Bearer ${process.env.EXPO_PUBLIC_RELAYER_SECRET || "cron_secret_123"}`,
+                },
+                body: formData,
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                Alert.alert("Success!", "Your certified capture has been posted to PeerPar Social.");
+            } else {
+                Alert.alert("Failed", data.error || "Failed to publish.");
+            }
+        } catch (error) {
+            Alert.alert("Error", error.message);
+        } finally {
+            setIsPublishing(false);
+        }
+    };
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -187,8 +254,23 @@ export default function ProofScreen({ route }) {
                     })
                 }
             >
-                <Text style={styles.shareButtonText}>Share Proof</Text>
+                <Text style={styles.shareButtonText}>Share External Link</Text>
             </TouchableOpacity>
+
+            {/* ── Publish to Social Button ── */}
+            {proof.tx_hash && (
+                <TouchableOpacity
+                    style={[styles.shareButton, styles.publishButton, isPublishing && styles.disabledButton]}
+                    onPress={handlePublishToSocial}
+                    disabled={isPublishing}
+                >
+                    {isPublishing ? (
+                        <ActivityIndicator color="#fff" />
+                    ) : (
+                        <Text style={styles.shareButtonText}>Publish to PeerPar Social 🔗</Text>
+                    )}
+                </TouchableOpacity>
+            )}
 
         </ScrollView>
     );
@@ -312,6 +394,13 @@ const styles = StyleSheet.create({
         padding: 16,
         alignItems: "center",
         marginTop: 8,
+    },
+    publishButton: {
+        backgroundColor: "#8B5CF6", // Purple to differentiate internal social sharing
+        marginTop: 12,
+    },
+    disabledButton: {
+        opacity: 0.7,
     },
     shareButtonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });
