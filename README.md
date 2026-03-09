@@ -8,12 +8,13 @@ PeerPar is an open-source, mobile-first media authenticity protocol. It gives an
 
 ---
 
-## 🏛 The Dual-Repository Strategy
+## 🏛 The Tri-Repository Strategy
 
-PeerPar is strategically split into two repositories to keep the forensic hashing layer strictly separated from the broader social platform.
+PeerPar is strategically split into three repositories to keep the forensic hashing layer strictly separated from the broader social platform and browser extensions.
 
 1. **The Protocol Layer (This Repo):** The mobile camera app, L2 smart contracts, and gas relayer. It generates the cryptographic proofs.
 2. **The Social Layer (Next.js Repo):** The public square where users interact, verify, and map contextual truth onto these cryptographic proofs.
+3. **The Access Layer (Browser Extension Repo):** Translates these proofs directly into social media feeds (Twitter, etc.) and acts as a funnel pointing users towards the Social Layer for context.
 
 ---
 
@@ -22,10 +23,11 @@ PeerPar is strategically split into two repositories to keep the forensic hashin
 ```
 [Camera frame in memory]
     │
-    ▼  SHA-256 + pHash + metadata hash
-[Merkle Tree built on-device]
+    ▼  Extract frames continuously
+[Generate Perceptual Hash (pHash) per second/frame]
     │
-    ▼  EIP-712 signed with device Secure Enclave key
+    ▼  Build Merkle Timeline (Merkle Tree of pHashes)
+[EIP-712 signed with device Secure Enclave key]
 [Relayer verifies & submits]
     │
     ▼  contract.anchor(merkleRoot) via calldata on Base L2
@@ -117,6 +119,7 @@ npm start
 | v0.2.0 | Decentralised relayer network (OpenGSN), multi-sig |
 | v0.3.0 | TEE / Secure Enclave raw frame interception |
 | v0.4.0 | PeerPar Social Layer |
+| v1.0.0 | Browser Extension (Verification directly on social networks via Merkle Proofs) |
 
 ---
 

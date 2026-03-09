@@ -14,7 +14,7 @@
 | **At approximately this time** | NTP-synchronized timestamp included in the signed payload. The relayer cross-validates against its own NTP clock. Both are recorded. |
 | **By this device** | The device generates a keypair on first launch, backed by iOS Secure Enclave / Android Keystore. The device signature is included in the relayer payload. |
 | **With this location** | GPS coordinates from `expo-location` included in metadata. |
-| **The file was not altered after anchoring** | SHA-256 is collision-resistant. Re-computing the hash of the file at any future date will match the on-chain anchor if and only if the file is byte-identical. *(Note: Pending introduction of Perceptual Hashing (pHash) and Merkle Timelines to allow partial-video verification if edits occur).* |
+| **The file was not altered after anchoring** | SHA-256 is collision-resistant. Re-computing the hash of the file at any future date will match the on-chain anchor if and only if the file is byte-identical. In addition, **Perceptual Hashing (p-Hash) & Merkle Timelines** allow partial-video verification: a snippet on social media can be verified against the original Merkle Root to prove that specific section is authentic, even if the video was compressed. |
 | **The record is permanent** | Calldata on Base L2 / Polygon zkEVM is immutable; it cannot be deleted. |
 
 ---
@@ -23,7 +23,7 @@
 
 | Claim | Why it is NOT proven |
 |---|---|
-| **The content is real or accurate** | PeerPar cannot verify what the camera was pointed at. A generated or pre-edited image can be anchored just as easily as an authentic one. |
+| **The content is real or accurate** | PeerPar cannot verify what the camera was pointed at. A generated or pre-edited image can be anchored just as easily as an authentic one. (Additionally, while p-hashes survive social media compression, heavy adversarial manipulation or deepfake filters may alter the p-hash, causing verification against the Merkle Root to safely fail). |
 | **Nothing happened before you pressed record** | Chain of custody begins at the moment `record()` is called. We make no claim about the origin or pre-processing of the raw frames. |
 | **The device clock was not spoofed** | NTP offset is flagged if > 30 seconds, but a determined adversary with OS-level access can manipulate the system clock before NTP sync. |
 | **The GPS coordinates are accurate** | GPS can be spoofed on rooted (Android) or jailbroken (iOS) devices. Accuracy is reported alongside the coordinates, but is self-reported by the OS. |
