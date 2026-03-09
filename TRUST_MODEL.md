@@ -14,7 +14,7 @@
 | **At approximately this time** | NTP-synchronized timestamp included in the signed payload. The relayer cross-validates against its own NTP clock. Both are recorded. |
 | **By this device** | The device generates a keypair on first launch, backed by iOS Secure Enclave / Android Keystore. The device signature is included in the relayer payload. |
 | **With this location** | GPS coordinates from `expo-location` included in metadata. |
-| **The file was not altered after anchoring** | SHA-256 is collision-resistant. Re-computing the hash of the file at any future date will match the on-chain anchor if and only if the file is byte-identical. |
+| **The file was not altered after anchoring** | SHA-256 is collision-resistant. Re-computing the hash of the file at any future date will match the on-chain anchor if and only if the file is byte-identical. *(Note: Pending introduction of Perceptual Hashing (pHash) and Merkle Timelines to allow partial-video verification if edits occur).* |
 | **The record is permanent** | Calldata on Base L2 / Polygon zkEVM is immutable; it cannot be deleted. |
 
 ---
@@ -56,9 +56,10 @@
 - The L1 (Ethereum mainnet) finality provides ultimate security for calldata permanence.
 - Block timestamps are within ±15 minutes of real time (Ethereum consensus guarantee).
 
-### Verification Portal Layer
+### Verification Portal Layer & Social Ecosystem
 - The verifier re-hashes the uploaded file entirely in-browser. The portal never sends the file to a server.
 - Block explorer APIs queried by the portal could be temporarily unavailable or return stale data.
+- **The Social Layer (Next.js Application)** provides contextual human and AI evaluations of the media. The Protocol proves *existence*; the Social Layer debates *meaning*.
 
 ---
 

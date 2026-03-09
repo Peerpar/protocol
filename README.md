@@ -8,6 +8,15 @@ PeerPar is an open-source, mobile-first media authenticity protocol. It gives an
 
 ---
 
+## 🏛 The Dual-Repository Strategy
+
+PeerPar is strategically split into two repositories to keep the forensic hashing layer strictly separated from the broader social platform.
+
+1. **The Protocol Layer (This Repo):** The mobile camera app, L2 smart contracts, and gas relayer. It generates the cryptographic proofs.
+2. **The Social Layer (Next.js Repo):** The public square where users interact, verify, and map contextual truth onto these cryptographic proofs.
+
+---
+
 ## How It Works
 
 ```
