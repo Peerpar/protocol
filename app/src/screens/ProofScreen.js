@@ -131,12 +131,14 @@ export default function ProofScreen({ route }) {
             // Ensure process.env.EXPO_PUBLIC_SOCIAL_API_URL is set in the app
             const apiUrl = process.env.EXPO_PUBLIC_SOCIAL_API_URL || "http://192.168.1.100:3000/api/publish";
 
+            // TODO v0.2.0 — Publishing from app to social layer requires proper auth design.
+            // Device-to-social auth should use the user's session token from LinkedDevice,
+            // not a shared secret. EXPO_PUBLIC_ variables are visible in the app bundle.
+            // Tracking issue: implement OAuth handshake via SettingsScreen WebView flow.
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: {
-                    // Match the relayer secret configured on the web side.
-                    // Ideally handled via proper auth headers.
-                    'Authorization': `Bearer ${process.env.EXPO_PUBLIC_RELAYER_SECRET || "cron_secret_123"}`,
+                    // Auth header intentionally removed — see TODO above
                 },
                 body: formData,
             });
