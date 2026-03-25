@@ -14,9 +14,28 @@
 | **At approximately this time** | NTP-synchronized timestamp included in the signed payload. The relayer cross-validates against its own NTP clock. Both are recorded. |
 | **By this device** | The device generates a keypair on first launch, backed by iOS Secure Enclave / Android Keystore. The device signature is included in the relayer payload. |
 | **With this location** | GPS coordinates from `expo-location` included in metadata. |
-| **The file was not altered after anchoring** | SHA-256 is collision-resistant. Re-computing the hash of the file at any future date will match the on-chain anchor if and only if the file is byte-identical. In addition, **Perceptual Hashing (p-Hash) & Merkle Timelines** allow partial-video verification: a snippet on social media can be verified against the original Merkle Root to prove that specific section is authentic, even if the video was compressed. |
+| **The file was not altered after anchoring** | SHA-256 is collision-resistant. Re-computing the hash of the file at any future date will match the on-chain anchor if and only if the file is byte-identical.
 | **The record is permanent** | Calldata on Base L2 / Polygon zkEVM is immutable; it cannot be deleted. |
 
+### Implementation note: hashing occurs post-codec (v0.1.0)
+ 
+In v0.1.0, SHA-256 is computed from the saved file URI after the device codec has written the file to disk. This means the hash reflects the compressed output of the codec, not the raw sensor frames.
+ 
+**What this means in practice:** The chain of custody guarantee begins at the moment the file is finalized on-device, not at the moment the first frame is captured. Any manipulation that occurs before `record()` completes — at the codec or OS level — would not be detectable by the hash alone.
+ 
+This is an acknowledged limitation documented in the roadmap below and in `hasher.js`.
+ 
+---
+ 
+## Planned Capabilities (Not Yet Implemented)
+ 
+The following features are on the roadmap and will strengthen the chain of custody guarantee. They are listed here to distinguish between what the system currently proves and what it will prove in future versions.
+ 
+| Capability | Target | What it will add |
+|---|---|---|
+| **Merkle Timeline** | v0.2.0 | A Merkle tree of per-second frame hashes will be anchored instead of a single file hash. This allows partial-video verification: a clip extracted from a longer recording can be verified against the original Merkle Root, proving the segment is authentic even if the full video is unavailable. |
+| **Perceptual Hash (pHash)** | v0.2.0 | A DCT-based perceptual hash will be computed alongside SHA-256. Two visually identical videos re-encoded at different bitrates will produce nearly identical pHashes (Hamming distance ≈ 0), enabling cross-compression verification. Currently returns a zero placeholder. Requires a Dev Build (not compatible with Expo Go). |
+| **Pre-codec frame interception** | v0.3.0 | Using Vision Camera frame processors and TEE / Secure Enclave raw frame access, hashing will be moved to occur on raw frames in memory before the codec writes to disk. This is the cryptographic ideal: the chain of custody will begin at the sensor level. |
 ---
 
 ## What the System Does NOT PROVE
@@ -30,6 +49,7 @@
 | **The relayer is neutral** | The relayer is currently a single EOA controlled by the PeerPar team. It could delay, reorder, or drop submissions. This is an acknowledged centralisation risk (see `/relayer/README.md`). |
 | **The device was not compromised** | If an attacker has root access or has replaced the app binary, the Secure Enclave / Keystore key could have been extracted or the hash computed over different data. |
 | **IPFS content is preserved** | IPFS pinning is opt-in and not guaranteed. The on-chain anchor is the authoritative record; IPFS is a convenience backup only. |
+| **Re-compressed versions of the same video are detectable** | Without pHash (planned for v0.2.0), the system cannot confirm that a re-encoded version of a video corresponds to an anchored original. SHA-256 will differ across encodings. |
 
 ---
 

@@ -4,7 +4,7 @@
 >
 > It does **not** prove the content is genuine or unedited.
 
-PeerPar is an open-source, mobile-first media authenticity protocol. It gives anyone — including journalists in conflict zones — a **free, instant, tamper-evident cryptographic record** of any photo or video they capture.
+PeerPar is an open-source, mobile-first media authenticity protocol. It provides a technical push for the truth ecosystem by making digital records **Cryptographically Irrefutable** and **Universally Accessible**. It gives anyone — including journalists in conflict zones — a **free, instant, tamper-evident cryptographic record** of any photo or video they capture, proving precisely **what** existed and **when**.
 
 ---
 
