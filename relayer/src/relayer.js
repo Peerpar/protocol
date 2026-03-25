@@ -154,6 +154,32 @@ async function processAnchorRequest(body, config) {
     // for finality purposes (proven batch finality follows later on L1).
     const receipt = await tx.wait(1);
 
+    // Notificar al social layer para indexar la prueba
+    const socialApiUrl = process.env.SOCIAL_API_URL;
+    if (socialApiUrl) {
+        fetch(`${socialApiUrl}/api/anchor`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${process.env.SOCIAL_API_SECRET}`,
+            },
+            body: JSON.stringify({
+                merkleRoot: body.merkleRoot,
+                sha256Hex: body.sha256Hex,
+                pHashHex: body.pHashHex,
+                txHash: receipt.hash,
+                blockNumber: receipt.blockNumber,
+                submitter: effectiveDeviceAddress,
+                timestamp: Number(body.ntpTimestamp),
+            }),
+        }).catch(err => {
+            // WHY fire-and-forget: la prueba ya está en la blockchain.
+            // Si el social layer falla, la prueba no se pierde — solo
+            // no aparece en el índice hasta el próximo retry.
+            console.warn("[relayer] Social layer index failed:", err.message);
+        });
+    }
+
     return {
         txHash: receipt.hash,
         blockNumber: receipt.blockNumber,

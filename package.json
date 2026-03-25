@@ -16,5 +16,7 @@
         "start:portal": "cd portal && npm start",
         "start:app": "cd app && npx expo start"
     },
-    "devDependencies": {}
+    "dependencies": {
+        "ethers": "^6.16.0"
+    }
 }
