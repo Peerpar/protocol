@@ -34,7 +34,7 @@ export default function SettingsScreen() {
 
         try {
             const parsedData = JSON.parse(data);
-            if (parsedData.type === 'OAUTH_SUCCESS' && parsedData.sessionToken) {
+            if (parsedData.type === 'MOBILE_AUTH_SUCCESS' && parsedData.token) {
                 setShowWebView(false);
                 setIsLinking(true);
 
@@ -50,7 +50,7 @@ export default function SettingsScreen() {
                 const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${parsedData.sessionToken}`
+                        'Authorization': `Bearer ${parsedData.Token}`
                     },
                     body: formData
                 });
@@ -75,7 +75,7 @@ export default function SettingsScreen() {
         // Inject JS to intercept the session token after successful NextAuth login
         // Note: For a true production build, we'd build a specific /mobile-login page on Next.js 
         // that naturally executes window.ReactNativeWebView.postMessage
-        const loginUrl = process.env.EXPO_PUBLIC_SOCIAL_WEB_URL || "http://192.168.1.100:3000/login";
+        const loginUrl = `${process.env.EXPO_PUBLIC_SOCIAL_WEB_URL || "https://peerpar.org"}/mobile-login`;
 
         return (
             <View style={{ flex: 1, paddingTop: 40, backgroundColor: "#0F172A" }}>
@@ -88,25 +88,7 @@ export default function SettingsScreen() {
                 <WebView
                     source={{ uri: loginUrl }}
                     onMessage={handleWebViewMessage}
-                    injectedJavaScript={`
-                        // This interval checks if NextAuth has populated a session cookie
-                        // and attempts to send it back to React Native.
-                        // In a real app we would have a dedicated API route for this handshake.
-                        let checkSession = setInterval(() => {
-                            const cookies = document.cookie;
-                            if (cookies.includes('next-auth.session-token')) {
-                                clearInterval(checkSession);
-                                const tokenMatch = cookies.match(/next-auth\.session-token=([^;]+)/);
-                                if (tokenMatch && tokenMatch[1]) {
-                                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                                        type: 'OAUTH_SUCCESS',
-                                        sessionToken: tokenMatch[1]
-                                    }));
-                                }
-                            }
-                        }, 2000);
-                        true;
-                    `}
+                    injectedJavaScript={`true;`}
                 />
             </View>
         );
