@@ -32,6 +32,7 @@ for (const key of REQUIRED_ENV) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 const CHAIN_ID = parseInt(process.env.CHAIN_ID, 10);
 
