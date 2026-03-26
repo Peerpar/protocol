@@ -39,9 +39,7 @@ export default function SettingsScreen() {
                 setIsLinking(true);
 
                 // Call the API endpoint securely with the session token
-                const apiUrl = process.env.EXPO_PUBLIC_SOCIAL_API_URL
-                    ? process.env.EXPO_PUBLIC_SOCIAL_API_URL.replace('/publish', '/auth/link-device')
-                    : "http://192.168.1.100:3000/api/auth/link-device";
+                const apiUrl = `${process.env.EXPO_PUBLIC_SOCIAL_WEB_URL || "https://peerpar.org"}/api/auth/link-device`;
 
                 const formData = new FormData();
                 formData.append('certifierKey', deviceKey);
