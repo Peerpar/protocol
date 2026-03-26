@@ -4,7 +4,20 @@
 >
 > It does **not** prove the content is genuine or unedited.
 
-PeerPar is an open-source, mobile-first media authenticity protocol. It provides a technical push for the truth ecosystem by making digital records **Cryptographically Irrefutable** and **Universally Accessible**. It gives anyone — including journalists in conflict zones — a **free, instant, tamper-evident cryptographic record** of any photo or video they capture, proving precisely **what** existed and **when**.
+PeerPar is an open-source, mobile-first media authenticity protocol. It gives anyone — including journalists in conflict zones — a **free, instant, tamper-evident cryptographic record** of any photo or video they capture.
+
+---
+
+## ⚠️ Read This First
+
+Before using PeerPar in any legal, journalistic, or evidentiary context, read **[TRUST_MODEL.md](./TRUST_MODEL.md)**. It documents precisely what the system proves, what it does not prove, and where each trust assumption lives.
+
+**Short version:**
+- ✅ Proves the **exact file** existed at **approximately this time**
+- ✅ Signed by a **specific device's hardware-secured key**
+- ✅ Record is **permanent and immutable** on Base L2
+- ❌ Does NOT prove the content is real, original, or accurate
+- ❌ Does NOT prove anything that happened before you pressed record
 
 ---
 
@@ -18,25 +31,47 @@ PeerPar is strategically split into three repositories to keep the forensic hash
 
 ---
 
-## How It Works
+## How It Works (v0.1.0)
 
 ```
-[Camera frame in memory]
+[Camera captures photo → temp file:// URI in app sandbox]
     │
-    ▼  Extract frames continuously
-[Generate Perceptual Hash (pHash) per second/frame]
+    ▼  NTP timestamp acquired
+    ▼  GPS coordinates acquired
+[SHA-256 computed from saved file]
+[pHash — zero placeholder, see roadmap]
+[Metadata hash computed — GPS, timestamp, device, app version]
     │
-    ▼  Build Merkle Timeline (Merkle Tree of pHashes)
-[EIP-712 signed with device Secure Enclave key]
-[Relayer verifies & submits]
+    ▼  3-leaf Merkle tree built on-device
+    │  [sha256Hex, pHashHex, metadataHash]
+    │
+    ▼  EIP-712 signed with device Secure Enclave key
+[Relayer verifies signature & submits]
     │
     ▼  contract.anchor(merkleRoot) via calldata on Base L2
-[TxHash stored in local SQLite DB]
+[TxHash + proof stored in local SQLite DB]
+[Social layer notified — AnchorIndex updated]
     │
-    ▼  File saved to device gallery
+    ▼  File saved to device gallery ← LAST STEP
 ```
 
-The file is **never sent to any server** (unless the user explicitly opts into optional IPFS backup). The on-chain anchor is paid by the relayer — free to the user.
+The file is **never sent to any server** (unless the user explicitly opts into optional backup). The on-chain anchor is paid by the relayer — free to the user.
+
+### Implementation note: hashing occurs post-codec (v0.1.0)
+
+SHA-256 is computed from the saved file after the device codec writes to disk. The hash reflects the compressed output, not raw sensor frames. Pre-codec frame interception is planned for v0.3.0. See `TRUST_MODEL.md` for full implications.
+
+---
+
+## Roadmap
+
+| Version | Milestone | Status |
+|---|---|---|
+| v0.1.0 | SHA-256 proof-of-existence, EIP-712 signing, relayer, SQLite, verification portal | ✅ Live on Base Sepolia |
+| v0.2.0 | pHash (perceptual hash), Merkle Timeline, decentralised relayer (OpenGSN), multi-sig | 🔜 Planned |
+| v0.3.0 | TEE / Secure Enclave raw frame interception — pre-codec hashing | 🔜 Planned |
+| v0.4.0 | PeerPar Social Layer integration | 🔜 Planned |
+| v1.0.0 | Browser Extension — verification directly on social networks via Merkle Proofs | 🔜 Planned |
 
 ---
 
@@ -51,15 +86,6 @@ peerpar/
 ├── TRUST_MODEL.md  ← read this first
 └── README.md
 ```
-
-## ⚠️ Read This First
-
-Before using PeerPar in any legal, journalistic, or evidentiary context, read **[TRUST_MODEL.md](./TRUST_MODEL.md)**. It documents precisely what the system proves, what it does not prove, and where each trust assumption lives.
-
-**Short version:**
-- ✅ Proves the **exact file** existed at **approximately this time**
-- ❌ Does NOT prove the content is real, original, or accurate
-- ❌ Does NOT prove anything that happened before you pressed record
 
 ---
 
@@ -82,7 +108,7 @@ npx hardhat run scripts/deploy.js --network localhost
 ```bash
 cd relayer
 npm install
-cp .env.example .env      # fill in keys
+cp .env.example .env      # fill in RELAYER_PRIVATE_KEY, CONTRACT_ADDRESS, RPC_URL, CHAIN_ID
 node src/server.js
 ```
 
@@ -90,7 +116,8 @@ node src/server.js
 ```bash
 cd app
 npm install
-npx expo start
+npx expo start            # Expo Go
+npx expo start --tunnel   # for physical device on a different network
 ```
 
 ### 4. Verification Portal
@@ -107,19 +134,7 @@ npm start
 1. **Hash-before-store** — hashing happens before the file reaches the gallery
 2. **Free to user** — the relayer pays all gas
 3. **Open source** — no proprietary black boxes
-4. **Honest scope** — the system makes no claim about what happened before record was pressed
-
----
-
-## Roadmap
-
-| Version | Milestone |
-|---|---|
-| v0.1.0 (now) | Core proof-of-existence, relayer, verification portal |
-| v0.2.0 | Decentralised relayer network (OpenGSN), multi-sig |
-| v0.3.0 | TEE / Secure Enclave raw frame interception |
-| v0.4.0 | PeerPar Social Layer |
-| v1.0.0 | Browser Extension (Verification directly on social networks via Merkle Proofs) |
+4. **Honest scope** — the system makes no claim beyond what it can mathematically prove
 
 ---
 
