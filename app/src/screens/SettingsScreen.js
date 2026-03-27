@@ -48,9 +48,13 @@ export default function SettingsScreen() {
                 const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${parsedData.Token}`
+                        'Authorization': `Bearer ${parsedData.token}`,
+                        'Content-Type': 'application/json',
                     },
-                    body: formData
+                    body: JSON.stringify({
+                        certifierKey: deviceKey,
+                        deviceName: 'PeerPar Mobile',
+                    }),
                 });
 
                 const result = await response.json();
