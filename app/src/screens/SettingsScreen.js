@@ -15,14 +15,28 @@ export default function SettingsScreen() {
     const [deviceKey, setDeviceKey] = useState(null);
     const [isLinking, setIsLinking] = useState(false);
     const [showWebView, setShowWebView] = useState(false);
+    const [isLinked, setIsLinked] = useState(false)
+    const [checkingLink, setCheckingLink] = useState(true)
 
     useEffect(() => {
-        async function loadKey() {
-            const key = await getDeviceAddress();
-            setDeviceKey(key);
+        async function loadKeyAndCheckLink() {
+            const key = await getDeviceAddress()
+            setDeviceKey(key)
+
+            // Verificar si ya está vinculado
+            try {
+                const apiBase = process.env.EXPO_PUBLIC_SOCIAL_WEB_URL || "https://www.peerpar.org"
+                const response = await fetch(`${apiBase}/api/auth/device-status?certifierKey=${key}`)
+                const data = await response.json()
+                setIsLinked(data.linked === true)
+            } catch {
+                setIsLinked(false)
+            } finally {
+                setCheckingLink(false)
+            }
         }
-        loadKey();
-    }, []);
+        loadKeyAndCheckLink()
+    }, [])
 
     const handleLinkHardwareInfo = () => {
         setShowWebView(true);
@@ -101,27 +115,41 @@ export default function SettingsScreen() {
             <Text style={styles.headerTitle}>Device Security</Text>
 
             <View style={styles.card}>
-                <Text style={styles.cardTitle}>Identity Binding (Phase 4)</Text>
-                <Text style={styles.cardDescription}>
-                    To prove that content originated from you, you must link this device's hardware enclave to your verified PeerPar social profile via OAuth.
-                </Text>
+                <Text style={styles.cardTitle}>Identity Binding</Text>
 
-                <Text style={styles.keyLabel}>Your Secure Enclave Public Key:</Text>
-                <Text style={styles.keyValue} selectable>
-                    {deviceKey || "Loading..."}
-                </Text>
-
-                <TouchableOpacity
-                    style={[styles.button, isLinking && styles.buttonDisabled]}
-                    onPress={handleLinkHardwareInfo}
-                    disabled={isLinking || !deviceKey}
-                >
-                    {isLinking ? (
-                        <ActivityIndicator color="#fff" />
-                    ) : (
-                        <Text style={styles.buttonText}>🔗 Link via PeerPar Social</Text>
-                    )}
-                </TouchableOpacity>
+                {checkingLink ? (
+                    <ActivityIndicator size="small" color="#3B82F6" style={{ marginTop: 12 }} />
+                ) : isLinked ? (
+                    <>
+                        <View style={styles.linkedBadge}>
+                            <Text style={styles.linkedText}>✓ Device linked</Text>
+                        </View>
+                        <Text style={styles.cardDescription}>
+                            This device's hardware key is connected to your PeerPar identity.
+                            Every capture you make is signed under your account.
+                        </Text>
+                        <Text style={styles.deviceKeyText} numberOfLines={1} ellipsizeMode="middle">
+                            {deviceKey}
+                        </Text>
+                    </>
+                ) : (
+                    <>
+                        <Text style={styles.cardDescription}>
+                            Link this device's hardware key to your PeerPar social profile to publish certified captures under your identity.
+                        </Text>
+                        <TouchableOpacity
+                            style={[styles.linkButton, isLinking && styles.linkButtonDisabled]}
+                            onPress={handleLinkHardwareInfo}
+                            disabled={isLinking}
+                        >
+                            {isLinking ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                                <Text style={styles.linkButtonText}>Link this device</Text>
+                            )}
+                        </TouchableOpacity>
+                    </>
+                )}
             </View>
         </View>
     );
@@ -197,5 +225,25 @@ const styles = StyleSheet.create({
     closeText: {
         color: "#EF4444",
         fontWeight: "bold",
-    }
+    },
+    linkedBadge: {
+        backgroundColor: "#064e3b",
+        borderRadius: 8,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        alignSelf: "flex-start",
+        marginTop: 8,
+        marginBottom: 10,
+    },
+    linkedText: {
+        color: "#6ee7b7",
+        fontSize: 13,
+        fontWeight: "600",
+    },
+    deviceKeyText: {
+        fontFamily: "monospace",
+        fontSize: 11,
+        color: "#64748b",
+        marginTop: 8,
+    },
 });
