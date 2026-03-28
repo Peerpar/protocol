@@ -24,7 +24,7 @@ import {
 import { getProofById } from "../db/database";
 
 const PORTAL_BASE_URL =
-    process.env.EXPO_PUBLIC_PORTAL_URL || "https://verify.peerpar.io";
+    process.env.EXPO_PUBLIC_PORTAL_URL || "https://www.peerpar.org/verificar";
 
 const EXPLORER_URLS = {
     84532: "https://sepolia.basescan.org/tx/",
@@ -129,7 +129,7 @@ export default function ProofScreen({ route }) {
 
             // Fetch to local network IP or your actual staging server
             // Ensure process.env.EXPO_PUBLIC_SOCIAL_API_URL is set in the app
-            const apiUrl = process.env.EXPO_PUBLIC_SOCIAL_API_URL || "http://192.168.1.100:3000/api/publish";
+            const apiUrl = process.env.EXPO_PUBLIC_SOCIAL_API_URL || "https://www.peerpar.org/api/publish";
 
             // TODO v0.2.0 — Publishing from app to social layer requires proper auth design.
             // Device-to-social auth should use the user's session token from LinkedDevice,
