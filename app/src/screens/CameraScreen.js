@@ -27,6 +27,7 @@ import {
     Alert,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import { Audio } from "expo-av";
 import * as MediaLibrary from "expo-media-library";
 import * as Location from "expo-location";
 import * as Device from "expo-device";
@@ -50,12 +51,20 @@ const DISCLAIMER_TEXT =
 
 export default function CameraScreen({ navigation }) {
     const cameraRef = useRef(null);
+    const audioRecordingRef = useRef(null);
+    const timerRef = useRef(null);
+
     const [cameraPermission, setCameraPermission] = useState(null);
     const [mediaPermission, setMediaPermission] = useState(null);
     const [locationPermission, setLocationPermission] = useState(null);
+    const [audioPermission, setAudioPermission] = useState(null);
+
     const [facing, setFacing] = useState("back");
+    const [captureMode, setCaptureMode] = useState("photo"); // "photo", "video", "audio"
     const [isCapturing, setIsCapturing] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
     const [captureStep, setCaptureStep] = useState("");
+    const [recordingTime, setRecordingTime] = useState(0);
 
     const [camPermission, requestCamPermission] = useCameraPermissions();
 
@@ -74,24 +83,42 @@ export default function CameraScreen({ navigation }) {
             } catch {
                 setLocationPermission("denied");
             }
+            try {
+                const { status: aud } = await Audio.requestPermissionsAsync();
+                setAudioPermission(aud);
+            } catch {
+                setAudioPermission("denied");
+            }
         })();
+
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+            if (audioRecordingRef.current) {
+                audioRecordingRef.current.stopAndUnloadAsync().catch(console.error);
+            }
+        };
     }, []);
 
-    async function captureAndAnchor() {
-        if (!cameraRef.current || isCapturing) return;
+    const formatTime = (secs) => {
+        const m = Math.floor(secs / 60).toString().padStart(2, "0");
+        const s = (secs % 60).toString().padStart(2, "0");
+        return `${m}:${s}`;
+    };
+
+    /**
+     * Executes the strict chain of custody flow (Steps 2-9) on a raw media file.
+     * Step 1 is handled interchangeably by the photo, video, or audio capturing functions
+     * before delegating to this flow with the resulting URI.
+     */
+    async function processMediaFlow(mediaUri) {
         setIsCapturing(true);
 
-        try {
-            // ── STEP 1: Capture photo to temp file (NOT gallery yet) ──────────────
-            setCaptureStep("Capturing…");
-            const photo = await cameraRef.current.takePictureAsync({
-                quality: 1.0,
-                skipProcessing: true,     // WHY: avoid any intermediate processing that alters bytes
-                exif: false,              // WHY: we record metadata ourselves — EXIF can be stripped/altered
-            });
-            // photo.uri is a temp file:// path local to the app sandbox.
-            // The OS has NOT saved this to the gallery yet.
+        // ── STEP 1: Capture photo to temp file (NOT gallery yet) ──────────────
+        // The raw URI has already been passed into this function.
+        // The OS has NOT saved this to the gallery yet.
+        const photo = { uri: mediaUri };
 
+        try {
             // ── STEP 2: Acquire NTP timestamp ──────────────────────────────────────
             setCaptureStep("Verifying time…");
             const ntpResult = await getNtpTimestamp();
@@ -195,16 +222,133 @@ export default function CameraScreen({ navigation }) {
             // WHY LAST: chain of custody is complete — hash + anchor submitted.
             // The gallery copy is a human-accessible backup; the proof is independent.
             if (mediaPermission === "granted") {
-                await MediaLibrary.saveToLibraryAsync(photo.uri);
+                await MediaLibrary.saveToLibraryAsync(mediaUri);
             }
 
             navigation.navigate("Proof", { proofId });
         } catch (err) {
-            console.error("[camera] Capture failed:", err);
-            Alert.alert("Capture Failed", err.message);
+            console.error("[camera] Processing failed:", err);
+            Alert.alert("Verification Failed", err.message);
         } finally {
             setIsCapturing(false);
             setCaptureStep("");
+        }
+    }
+
+    async function handlePrimaryAction() {
+        if (!cameraRef.current && captureMode !== "audio") return;
+        if (isCapturing) return;
+
+        if (captureMode === "photo") {
+            setIsCapturing(true);
+            setCaptureStep("Capturing…");
+            try {
+                const photo = await cameraRef.current.takePictureAsync({
+                    quality: 1.0,
+                    skipProcessing: true,
+                    exif: false,
+                });
+                await processMediaFlow(photo.uri);
+            } catch (err) {
+                console.error("[camera] Photo capture failed:", err);
+                Alert.alert("Capture Failed", err.message);
+                setIsCapturing(false);
+                setCaptureStep("");
+            }
+        }
+        else if (captureMode === "video") {
+            if (isRecording) {
+                cameraRef.current.stopRecording();
+            } else {
+                startVideoRecording();
+            }
+        }
+        else if (captureMode === "audio") {
+            if (isRecording) {
+                stopAudioRecording();
+            } else {
+                startAudioRecording();
+            }
+        }
+    }
+
+    async function startVideoRecording() {
+        if (!cameraRef.current) return;
+        setIsRecording(true);
+        setRecordingTime(0);
+
+        timerRef.current = setInterval(() => {
+            setRecordingTime((t) => {
+                if (t >= 300) {
+                    cameraRef.current.stopRecording();
+                    return t;
+                }
+                return t + 1;
+            });
+        }, 1000);
+
+        try {
+            const video = await cameraRef.current.recordAsync({ maxDuration: 300 });
+            clearInterval(timerRef.current);
+            setIsRecording(false);
+            if (video && video.uri) {
+                await processMediaFlow(video.uri);
+            }
+        } catch (err) {
+            clearInterval(timerRef.current);
+            setIsRecording(false);
+            Alert.alert("Video Error", err.message);
+        }
+    }
+
+    async function startAudioRecording() {
+        if (audioPermission !== "granted") {
+            Alert.alert("Permission Required", "Microphone access is missing.");
+            return;
+        }
+
+        try {
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+            });
+            const { recording } = await Audio.Recording.createAsync(
+                Audio.RecordingOptionsPresets.HIGH_QUALITY
+            );
+            audioRecordingRef.current = recording;
+
+            setIsRecording(true);
+            setRecordingTime(0);
+
+            timerRef.current = setInterval(() => {
+                setRecordingTime((t) => {
+                    if (t >= 300) {
+                        stopAudioRecording();
+                        return t;
+                    }
+                    return t + 1;
+                });
+            }, 1000);
+        } catch (err) {
+            Alert.alert("Audio Error", err.message);
+        }
+    }
+
+    async function stopAudioRecording() {
+        if (!audioRecordingRef.current) return;
+
+        clearInterval(timerRef.current);
+        setIsRecording(false);
+
+        try {
+            await audioRecordingRef.current.stopAndUnloadAsync();
+            const uri = audioRecordingRef.current.getURI();
+            audioRecordingRef.current = null;
+            if (uri) {
+                await processMediaFlow(uri);
+            }
+        } catch (err) {
+            Alert.alert("Audio Error", err.message);
         }
     }
 
@@ -221,13 +365,32 @@ export default function CameraScreen({ navigation }) {
 
     return (
         <View style={styles.container}>
-            <CameraView ref={cameraRef} style={styles.camera} facing={facing}>
+            {/* The camera must remain mounted to prevent errors when switching modes. It is hidden via opacity in audio mode. */}
+            <CameraView
+                ref={cameraRef}
+                style={[StyleSheet.absoluteFill, captureMode === "audio" && { opacity: 0 }]}
+                facing={facing}
+                mode={captureMode === "video" ? "video" : "picture"}
+            />
+
+            {/* UI overlay on top of the camera */}
+            <View style={StyleSheet.absoluteFill}>
                 {/* ── Top disclaimer banner ── */}
                 <View style={styles.disclaimerBanner}>
                     <Text style={styles.disclaimerText}>{DISCLAIMER_TEXT}</Text>
                 </View>
 
-                {/* ── Capture overlay ── */}
+                {/* ── Recording Timer Header ── */}
+                {(isRecording || (recordingTime > 0 && isCapturing)) && (
+                    <View style={styles.recordingStatus}>
+                        {isRecording && <View style={styles.redDot} />}
+                        <Text style={styles.recordingTime}>
+                            {formatTime(recordingTime)} / 05:00
+                        </Text>
+                    </View>
+                )}
+
+                {/* ── Capturing overlay (Processing) ── */}
                 {isCapturing && (
                     <View style={styles.capturingOverlay}>
                         <ActivityIndicator size="large" color="#fff" />
@@ -236,38 +399,62 @@ export default function CameraScreen({ navigation }) {
                 )}
 
                 {/* ── Bottom controls ── */}
-                <View style={styles.controls}>
-                    <TouchableOpacity
-                        style={styles.flipButton}
-                        onPress={() =>
-                            setFacing((f) =>
-                                f === "back" ? "front" : "back"
-                            )
-                        }
-                    >
-                        <Text style={styles.controlText}>Flip</Text>
-                    </TouchableOpacity>
+                {!isCapturing && (
+                    <View style={styles.bottomSection}>
 
-                    <TouchableOpacity
-                        style={[styles.captureButton, isCapturing && styles.captureButtonDisabled]}
-                        onPress={captureAndAnchor}
-                        disabled={isCapturing}
-                        accessibilityLabel="Capture and anchor photo"
-                        accessibilityRole="button"
-                    >
-                        <View style={styles.captureInner} />
-                    </TouchableOpacity>
+                        {/* ── Mode selector ── */}
+                        {!isRecording && (
+                            <View style={styles.modeContainer}>
+                                {["photo", "video", "audio"].map((mode) => (
+                                    <TouchableOpacity key={mode} onPress={() => setCaptureMode(mode)}>
+                                        <Text style={[styles.modeText, captureMode === mode && styles.modeTextActive]}>
+                                            {mode.toUpperCase()}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                        )}
 
-                    <View style={{ width: 60 }} />
-                </View>
-            </CameraView>
+                        <View style={styles.controls}>
+                            <TouchableOpacity
+                                style={styles.flipButton}
+                                onPress={() =>
+                                    setFacing((f) =>
+                                        f === "back" ? "front" : "back"
+                                    )
+                                }
+                                disabled={isRecording}
+                            >
+                                <Text style={[styles.controlText, isRecording && { opacity: 0 }]}>
+                                    Flip
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.captureButton, isCapturing && styles.captureButtonDisabled]}
+                                onPress={handlePrimaryAction}
+                                disabled={isCapturing}
+                                accessibilityLabel="Capture and anchor media"
+                                accessibilityRole="button"
+                            >
+                                <View style={[
+                                    styles.captureInner,
+                                    isRecording && styles.captureInnerRecording,
+                                    captureMode === "audio" && !isRecording && styles.captureInnerAudio,
+                                ]} />
+                            </TouchableOpacity>
+
+                            <View style={{ width: 60 }} />
+                        </View>
+                    </View>
+                )}
+            </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: "#000" },
-    camera: { flex: 1 },
     center: { flex: 1, justifyContent: "center", alignItems: "center" },
     permissionText: { color: "#fff", textAlign: "center", padding: 20 },
 
@@ -287,20 +474,57 @@ const styles = StyleSheet.create({
         textAlign: "center",
     },
 
+    recordingStatus: {
+        position: "absolute",
+        top: 70,
+        alignSelf: "center",
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: "rgba(0,0,0,0.6)",
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 20,
+    },
+    redDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: "#EF4444",
+        marginRight: 8
+    },
+    recordingTime: {
+        color: "#fff",
+        fontSize: 14,
+        fontWeight: "700",
+        fontVariant: ["tabular-nums"]
+    },
+
     capturingOverlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: "rgba(0,0,0,0.6)",
+        backgroundColor: "rgba(0,0,0,0.7)",
         justifyContent: "center",
         alignItems: "center",
         gap: 16,
+        zIndex: 10,
     },
     capturingText: { color: "#fff", fontSize: 16, fontWeight: "600" },
 
-    controls: {
+    bottomSection: {
         position: "absolute",
         bottom: 40,
         left: 0,
         right: 0,
+    },
+    modeContainer: {
+        flexDirection: "row",
+        justifyContent: "center",
+        gap: 24,
+        marginBottom: 24,
+    },
+    modeText: { color: "#94A3B8", fontSize: 13, fontWeight: "600" },
+    modeTextActive: { color: "#FBBF24", fontSize: 13, fontWeight: "700" },
+
+    controls: {
         flexDirection: "row",
         justifyContent: "space-around",
         alignItems: "center",
@@ -312,6 +536,7 @@ const styles = StyleSheet.create({
         justifyContent: "center",
     },
     controlText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+
     captureButton: {
         width: 80,
         height: 80,
@@ -327,5 +552,14 @@ const styles = StyleSheet.create({
         height: 64,
         borderRadius: 32,
         backgroundColor: "#fff",
+    },
+    captureInnerRecording: {
+        borderRadius: 6,
+        width: 32,
+        height: 32,
+        backgroundColor: "#EF4444"
+    },
+    captureInnerAudio: {
+        backgroundColor: "#8B5CF6"
     },
 });
