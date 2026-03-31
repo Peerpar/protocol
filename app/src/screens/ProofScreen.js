@@ -126,6 +126,8 @@ export default function ProofScreen({ route }) {
             formData.append('type', publishType);
             formData.append('txHash', proof.tx_hash);
             formData.append('certifierKey', proof.device_address);
+            formData.append('merkleRoot', proof.merkle_root);
+            formData.append('sha256Hex', proof.sha256_hex);
 
             // Fetch to local network IP or your actual staging server
             // Ensure process.env.EXPO_PUBLIC_SOCIAL_API_URL is set in the app
