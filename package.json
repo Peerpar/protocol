@@ -18,5 +18,8 @@
     },
     "dependencies": {
         "ethers": "^6.16.0"
+    },
+    "overrides": {
+        "qs": "^6.16.0"
     }
 }
