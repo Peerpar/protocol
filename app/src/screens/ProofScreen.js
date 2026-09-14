@@ -82,7 +82,14 @@ export default function ProofScreen({ route }) {
         return <View style={styles.center}><Text>Proof not found.</Text></View>;
     }
 
-    const verifyUrl = `${PORTAL_BASE_URL}/verify?root=${encodeURIComponent(proof.merkle_root)}`;
+    // WHY include phash + meta: the portal can only independently recompute
+    // the Merkle root (and thus confirm the uploaded file matches this exact
+    // anchor) if it has the other two leaves. Without them it can only check
+    // that *some* proof with this root exists on-chain, not that this file
+    // produced it.
+    const verifyUrl = `${PORTAL_BASE_URL}/verify?root=${encodeURIComponent(proof.merkle_root)}` +
+        `&phash=${encodeURIComponent(proof.p_hash_hex)}` +
+        `&meta=${encodeURIComponent(proof.metadata_hash)}`;
     const explorerUrl = proof.tx_hash
         ? `${EXPLORER_URLS[proof.network_id] || "https://basescan.org/tx/"}${proof.tx_hash}`
         : null;
@@ -193,6 +200,7 @@ export default function ProofScreen({ route }) {
                 <Text style={styles.sectionTitle}>Cryptographic Fingerprints</Text>
                 <FieldRow label="SHA-256" value={proof.sha256_hex} copyable />
                 <FieldRow label="pHash (visual)" value={proof.p_hash_hex} copyable />
+                <FieldRow label="Metadata Hash" value={proof.metadata_hash} copyable />
                 <FieldRow label="Merkle Root" value={proof.merkle_root} copyable />
             </View>
 

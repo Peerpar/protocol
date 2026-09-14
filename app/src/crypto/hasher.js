@@ -27,23 +27,29 @@
  */
 
 import * as Crypto from "expo-crypto";
+import { File } from "expo-file-system";
 
 /**
  * Compute SHA-256 of a file given its URI.
+ *
+ * WHY Crypto.digest (not digestStringAsync): digestStringAsync hashes the
+ * JS *string* you pass it — there is no "hash this file's bytes" input mode
+ * for it. To hash the actual media content we have to read the raw bytes
+ * off disk ourselves and hash those bytes directly via Crypto.digest.
  *
  * @param {string} fileUri  — local file:// URI of the media file
  * @returns {Promise<string>} — lowercase hex SHA-256 (64 chars)
  */
 export async function computeSha256(fileUri) {
-    const digest = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        fileUri,
-        {
-            encoding: Crypto.CryptoEncoding.HEX,
-            inputEncoding: Crypto.CryptoEncoding.FILE,
-        }
-    );
-    return digest.toLowerCase();
+    const bytes = await new File(fileUri).bytes();
+    const digestBuffer = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes);
+    return bufferToHex(digestBuffer);
+}
+
+function bufferToHex(buffer) {
+    return [...new Uint8Array(buffer)]
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
 }
 
 /**

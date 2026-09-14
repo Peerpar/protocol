@@ -438,14 +438,28 @@
 
     <!-- STEP 2: Merkle Root -->
     <div class="card">
-      <h2>Step 2 — Enter Merkle Root (optional)</h2>
+      <h2>Step 2 — Enter Proof Details (optional)</h2>
       <p style="color:var(--muted); font-size:13px; margin-bottom:14px;">
-        Copy from the PeerPar app's proof screen, or the URL will pre-fill this automatically.
+        Copy these from the PeerPar app's proof screen ("Cryptographic Fingerprints"), or a shared
+        verification link will pre-fill them automatically. The Merkle Root alone only checks that
+        <em>some</em> proof exists on-chain — pHash + Metadata Hash let the portal independently
+        recompute the root and confirm <strong>this specific file</strong> matches it.
       </p>
-      <div class="input-group">
+      <div class="input-group" style="margin-bottom: 14px;">
         <label for="merkleInput">Merkle Root (0x…)</label>
         <input class="merkle-input" id="merkleInput" type="text"
           placeholder="0x0000000000000000000000000000000000000000000000000000000000000000" spellcheck="false"
+          autocomplete="off" />
+      </div>
+      <div class="input-group" style="margin-bottom: 14px;">
+        <label for="phashInput">pHash (16 hex chars, from proof)</label>
+        <input class="merkle-input" id="phashInput" type="text" placeholder="0000000000000000"
+          spellcheck="false" autocomplete="off" />
+      </div>
+      <div class="input-group">
+        <label for="metaInput">Metadata Hash (64 hex chars, from proof)</label>
+        <input class="merkle-input" id="metaInput" type="text"
+          placeholder="0000000000000000000000000000000000000000000000000000000000000000" spellcheck="false"
           autocomplete="off" />
       </div>
     </div>
@@ -474,14 +488,14 @@
         <div class="step">
           <span class="step-icon">🖼️</span>
           <div class="step-content">
-            <div class="step-label">pHash (perceptual fingerprint — images only)</div>
+            <div class="step-label">pHash of your upload (independently computed, images only — reference only, not used below since perceptual hashes are approximate)</div>
             <div class="step-value" id="result-phash">—</div>
           </div>
         </div>
         <div class="step">
           <span class="step-icon">🌲</span>
           <div class="step-content">
-            <div class="step-label">Merkle Root computed from [sha256, pHash, metadataHash]</div>
+            <div class="step-label">Merkle Root recomputed from [SHA-256 of your file, pHash from proof, Metadata Hash from proof]</div>
             <div class="step-value" id="result-merkle">—</div>
           </div>
         </div>
@@ -670,10 +684,17 @@
     const dropZone = document.getElementById("dropZone");
     const verifyBtn = document.getElementById("verifyBtn");
     const merkleInput = document.getElementById("merkleInput");
+    const phashInput = document.getElementById("phashInput");
+    const metaInput = document.getElementById("metaInput");
 
-    // Pre-fill merkleRoot from URL query param (e.g., from QR code)
-    const urlRoot = new URLSearchParams(location.search).get("root");
+    // Pre-fill from URL query params (e.g., from a shared QR code / verify link)
+    const urlParams = new URLSearchParams(location.search);
+    const urlRoot = urlParams.get("root");
+    const urlPhash = urlParams.get("phash");
+    const urlMeta = urlParams.get("meta");
     if (urlRoot) merkleInput.value = urlRoot;
+    if (urlPhash) phashInput.value = urlPhash;
+    if (urlMeta) metaInput.value = urlMeta;
 
     function setFile(file) {
       selectedFile = file;
@@ -706,57 +727,94 @@
       document.getElementById("results").style.display = "none";
 
       try {
-        // 1. Compute hashes
+        // 1. Compute hashes of the uploaded file
         const sha256Hex = await sha256File(selectedFile);
         document.getElementById("result-sha256").textContent = sha256Hex;
 
         verifyBtn.textContent = "⌛ Computing pHash…";
-        const pHashHex = await computePHash(selectedFile);
+        // This is an independent perceptual hash of the upload, shown for
+        // reference only — perceptual hashes are approximate (nearly-identical
+        // images produce nearly-identical, not identical, hashes), so it is
+        // NOT compared for an exact match below.
+        const uploadPHashHex = await computePHash(selectedFile);
         document.getElementById("result-phash").textContent =
-          pHashHex === "0".repeat(16) ? "N/A (video or unsupported format)" : pHashHex;
+          uploadPHashHex === "0".repeat(16) ? "N/A (video/audio or unsupported format)" : uploadPHashHex;
 
-        // 2. We need metadataHash — if not provided via URL, we can't compute
-        //    the full Merkle root. We just display what we have.
         const merkleRoot = merkleInput.value.trim();
-        document.getElementById("result-merkle").textContent =
-          merkleRoot || "(provide Merkle root above to check on-chain)";
+        const proofPHash = phashInput.value.trim();
+        const proofMeta = metaInput.value.trim();
+        const canRecompute = /^[0-9a-f]{16}$/i.test(proofPHash) && /^[0-9a-f]{64}$/i.test(proofMeta);
 
-        // 3. Query on-chain if we have a root
-        let logs = null;
-        if (merkleRoot && merkleRoot.startsWith("0x") && merkleRoot.length === 66) {
-          verifyBtn.textContent = "⌛ Querying blockchain…";
-          logs = await queryOnChain(merkleRoot);
+        // 2. Independently recompute the Merkle root from THIS file's SHA-256
+        //    plus the pHash + metadataHash asserted by the proof. This is the
+        //    only way to cryptographically confirm the uploaded file itself —
+        //    not just some root — was anchored: SHA-256 collision resistance
+        //    means no other file could have produced this leaf.
+        let computedRoot = null;
+        if (canRecompute) {
+          computedRoot = await computeMerkleRoot([sha256Hex, proofPHash.toLowerCase(), proofMeta.toLowerCase()]);
         }
+        document.getElementById("result-merkle").textContent =
+          computedRoot || "(provide pHash + Metadata Hash above to recompute)";
 
-        // 4. Check if SHA-256 appears in any log's data
-        const sha256Match = logs?.some(log =>
-          log.data?.toLowerCase().includes(sha256Hex.toLowerCase())
-        );
+        // 3. Query on-chain for whichever root we're checking against
+        const targetRoot = (canRecompute ? computedRoot : merkleRoot).toLowerCase();
+        let logs = null;
+        if (targetRoot && targetRoot.startsWith("0x") && targetRoot.length === 66) {
+          verifyBtn.textContent = "⌛ Querying blockchain…";
+          logs = await queryOnChain(targetRoot);
+        }
         const rootFound = logs !== null && logs.length > 0;
 
-        // 5. Display result
+        // 4. Display result
         document.getElementById("results").style.display = "block";
         const banner = document.getElementById("resultBanner");
 
-        if (!merkleRoot) {
-          banner.className = "result-banner";
-          banner.style.border = "2px solid var(--border)";
-          banner.innerHTML = `<h3 style="color:var(--muted)">Hashes Computed</h3>
-        <p>Enter a Merkle root to check the on-chain anchor. The SHA-256 above uniquely identifies this file.</p>`;
-        } else if (rootFound) {
+        if (canRecompute && merkleRoot && computedRoot !== merkleRoot.toLowerCase()) {
+          // We have everything needed to check, and it doesn't match — this
+          // is a hard cryptographic mismatch regardless of on-chain lookup.
+          banner.className = "result-banner no-match";
+          banner.innerHTML = `<h3>❌ FILE DOES NOT MATCH THIS PROOF</h3>
+        <p>Recomputing the Merkle root from this file's SHA-256 plus the provided pHash and Metadata Hash
+        produces a <em>different</em> root than the one entered. This file was not the one anchored by that proof.</p>`;
+        } else if (canRecompute && rootFound) {
           banner.className = "result-banner match";
-          banner.innerHTML = `<h3>✅ MATCH FOUND</h3>
-        <p>This Merkle root exists on-chain. The file's SHA-256 was anchored via PeerPar Protocol.<br/>
+          banner.innerHTML = `<h3>✅ VERIFIED</h3>
+        <p>This exact file's SHA-256 was independently recomputed here, combined with the proof's pHash and
+        Metadata Hash, and matches a Merkle root anchored on-chain.<br/>
         <strong>See the disclaimer above for what this proves and does not prove.</strong></p>`;
-        } else if (logs === null) {
+        } else if (canRecompute && logs === null) {
+          banner.className = "result-banner";
+          banner.style.border = "2px solid var(--amber)";
+          banner.innerHTML = `<h3 style="color:var(--amber)">⚠️ Could Not Query Chain</h3>
+        <p>The recomputed root matches what was provided, but the RPC endpoint was unreachable — check manually on
+        <a href="${CONFIG.EXPLORER_URL}" target="_blank" style="color:var(--accent)">the block explorer</a>.</p>`;
+        } else if (canRecompute) {
+          banner.className = "result-banner no-match";
+          banner.innerHTML = `<h3>❌ NO MATCH</h3>
+        <p>The recomputed root was not found on-chain. This proof may not have been anchored, or the details entered are incorrect.</p>`;
+        } else if (merkleRoot && rootFound) {
+          banner.className = "result-banner";
+          banner.style.border = "2px solid var(--amber)";
+          banner.innerHTML = `<h3 style="color:var(--amber)">⚠️ Root Exists On-Chain (partial check only)</h3>
+        <p><em>Some</em> proof with this Merkle root was anchored on-chain — but without the pHash and Metadata
+        Hash from that proof, the portal cannot confirm <strong>this uploaded file</strong> is the one that
+        produced it. Enter those two fields (from the app's proof screen) for a full cryptographic match.</p>`;
+        } else if (merkleRoot && logs === null) {
           banner.className = "result-banner";
           banner.style.border = "2px solid var(--amber)";
           banner.innerHTML = `<h3 style="color:var(--amber)">⚠️ Could Not Query Chain</h3>
         <p>The RPC endpoint was unreachable. Hashes were computed successfully — check manually on <a href="${CONFIG.EXPLORER_URL}" target="_blank" style="color:var(--accent)">the block explorer</a>.</p>`;
-        } else {
+        } else if (merkleRoot) {
           banner.className = "result-banner no-match";
           banner.innerHTML = `<h3>❌ NO MATCH</h3>
         <p>No on-chain anchor found for this Merkle root. The file may not have been anchored via PeerPar, or the root was entered incorrectly.</p>`;
+        } else {
+          banner.className = "result-banner";
+          banner.style.border = "2px solid var(--border)";
+          banner.innerHTML = `<h3 style="color:var(--muted)">Hashes Computed</h3>
+        <p>Enter a Merkle root (and ideally pHash + Metadata Hash) above to check the on-chain anchor.
+        The SHA-256 above uniquely identifies this file.</p>`;
         }
 
         // 6. Show on-chain data if found
