@@ -57,6 +57,25 @@ const PROOF_TYPES = {
     ],
 };
 
+// ── EIP-712 domain + types for authenticating a "publish to social" request ──
+// WHY a separate domain (not the ProofRegistry one above): this signature
+// never touches the chain — it authenticates an API call to the social
+// layer, proving the caller holds the private key for the certifierKey
+// (device address) it claims, without which anyone who merely knows a
+// device's public address (shown throughout the app and shared verify
+// links) could attribute fabricated "publish" requests to it. A distinct
+// domain name + primaryType keeps this signature from ever being replayable
+// as a Proof signature or vice versa (EIP-712 domain separation).
+const PUBLISH_DOMAIN_NAME = "PeerParSocial";
+const PUBLISH_DOMAIN_VERSION = "1";
+
+const PUBLISH_TYPES = {
+    Publish: [
+        { name: "merkleRoot", type: "bytes32" },
+        { name: "timestamp", type: "uint64" },
+    ],
+};
+
 /**
  * Retrieve the device keypair from secure storage, generating it if needed.
  *
@@ -115,6 +134,29 @@ export async function signProof(payload, chainId, contractAddress) {
         verifyingContract: contractAddress,
     };
     const signature = await wallet.signTypedData(domain, PROOF_TYPES, payload);
+    return { signature, deviceAddress: wallet.address };
+}
+
+/**
+ * Sign a "publish to social" request, proving this device (not just anyone
+ * who knows its public address) is the one asking to attribute a proof to
+ * its linked account.
+ *
+ * @param {string} merkleRoot   — 0x-prefixed 32-byte hex, the proof being published
+ * @param {number} timestamp    — Unix seconds; the server rejects stale signatures
+ * @returns {Promise<{ signature: string, deviceAddress: string }>}
+ */
+export async function signPublishRequest(merkleRoot, timestamp) {
+    const wallet = await getOrCreateDeviceWallet();
+
+    const domain = {
+        name: PUBLISH_DOMAIN_NAME,
+        version: PUBLISH_DOMAIN_VERSION,
+    };
+    const signature = await wallet.signTypedData(domain, PUBLISH_TYPES, {
+        merkleRoot,
+        timestamp: BigInt(timestamp),
+    });
     return { signature, deviceAddress: wallet.address };
 }
 

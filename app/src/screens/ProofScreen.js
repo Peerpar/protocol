@@ -23,6 +23,7 @@ import {
 } from "react-native";
 // import QRCode from "react-native-qrcode-svg"; // ToDo: re-enable after native build (also line 170 QRCode value={verifyUrl})
 import { getProofById } from "../db/database";
+import { signPublishRequest } from "../crypto/signer";
 
 const PORTAL_BASE_URL =
     process.env.EXPO_PUBLIC_PORTAL_URL || "https://www.peerpar.org/verificar";
@@ -137,19 +138,27 @@ export default function ProofScreen({ route }) {
             formData.append('merkleRoot', proof.merkle_root);
             formData.append('sha256Hex', proof.sha256_hex);
 
+            // WHY sign the publish request itself: certifierKey is just a
+            // public address — it's displayed and shared throughout the app
+            // (Settings, verify links), so knowing it proves nothing on its
+            // own. Signing {merkleRoot, timestamp} with the device's key
+            // proves THIS device is asking to publish, not merely that
+            // someone knows its address. The server checks the recovered
+            // signer matches certifierKey and that timestamp is recent.
+            const publishTimestamp = Math.floor(Date.now() / 1000);
+            const { signature: publishSignature } = await signPublishRequest(
+                proof.merkle_root,
+                publishTimestamp
+            );
+            formData.append('timestamp', String(publishTimestamp));
+            formData.append('publishSignature', publishSignature);
+
             // Fetch to local network IP or your actual staging server
             // Ensure process.env.EXPO_PUBLIC_SOCIAL_API_URL is set in the app
             const apiUrl = process.env.EXPO_PUBLIC_SOCIAL_API_URL || "https://www.peerpar.org/api/publish";
 
-            // TODO v0.2.0 — Publishing from app to social layer requires proper auth design.
-            // Device-to-social auth should use the user's session token from LinkedDevice,
-            // not a shared secret. EXPO_PUBLIC_ variables are visible in the app bundle.
-            // Tracking issue: implement OAuth handshake via SettingsScreen WebView flow.
             const response = await fetch(apiUrl, {
                 method: 'POST',
-                headers: {
-                    // Auth header intentionally removed — see TODO above
-                },
                 body: formData,
             });
 
