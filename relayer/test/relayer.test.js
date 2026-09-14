@@ -9,7 +9,11 @@
  * signing/verification without hitting a real RPC endpoint or UDP socket.
  */
 
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const { ethers } = require("ethers");
+const { createAnchorStore } = require("../src/anchorStore");
 
 jest.mock("ethers", () => {
     const actual = jest.requireActual("ethers");
@@ -49,12 +53,23 @@ const OTHER_WALLET = ethers.Wallet.createRandom();
 const CHAIN_ID = 84532;
 const CONTRACT_ADDRESS = "0x1234567890123456789012345678901234567890";
 
+// WHY a fresh anchorStore per test (see beforeEach below): without this,
+// every test in this file would share relayer.js's real on-disk default
+// store, so a merkleRoot recorded by one test run would make a later run
+// of "anchors when the signature matches" fail with a false 409 — the
+// exact persistence-across-restarts behavior anchorStore.js is supposed to
+// have, just landing on the wrong (real) file if we don't isolate it here.
 const RELAYER_CONFIG = {
     contractAddress: CONTRACT_ADDRESS,
     rpcUrl: "http://localhost:8545",
     relayerWallet: ethers.Wallet.createRandom(),
     chainId: CHAIN_ID,
 };
+
+function useIsolatedAnchorStore() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "relayer-test-"));
+    RELAYER_CONFIG.anchorStore = createAnchorStore(path.join(dir, "roots.log"));
+}
 
 function makeBody(overrides = {}) {
     return {
@@ -111,6 +126,7 @@ describe("processAnchorRequest — signature validation", () => {
     beforeEach(() => {
         jest.clearAllMocks();
         delete process.env.SOCIAL_API_URL;
+        useIsolatedAnchorStore();
     });
 
     test("anchors when the signature matches the declared deviceAddress", async () => {
@@ -169,5 +185,67 @@ describe("processAnchorRequest — signature validation", () => {
             statusCode: 400,
         });
         expect(anchorFn).not.toHaveBeenCalled();
+    });
+});
+
+describe("processAnchorRequest — replay / duplicate-anchor rejection", () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        delete process.env.SOCIAL_API_URL;
+        useIsolatedAnchorStore();
+    });
+
+    test("rejects a second submission of the same merkleRoot with 409, without spending gas again", async () => {
+        const anchorFn = mockContractSuccess();
+        const body = makeBody();
+        body.signature = await signBody(TEST_WALLET, body);
+
+        const first = await processAnchorRequest(body, RELAYER_CONFIG);
+        expect(first.txHash).toBe(
+            "0xfeed000000000000000000000000000000000000000000000000000000000"
+        );
+        expect(anchorFn).toHaveBeenCalledTimes(1);
+
+        // Replay the exact same (still validly signed) request.
+        await expect(processAnchorRequest(body, RELAYER_CONFIG)).rejects.toMatchObject({
+            statusCode: 409,
+        });
+        // No second on-chain call — this is what actually stops the
+        // relayer wallet from being drained by a replayed request.
+        expect(anchorFn).toHaveBeenCalledTimes(1);
+        expect(anchorFn.estimateGas).toHaveBeenCalledTimes(1);
+    });
+
+    test("a merkleRoot is not recorded until the transaction actually confirms", async () => {
+        const failingAnchor = jest.fn().mockRejectedValue(new Error("network error"));
+        failingAnchor.estimateGas = jest.fn().mockResolvedValue(80_000n);
+        ethers.Contract.mockImplementation(() => ({ anchor: failingAnchor }));
+
+        const body = makeBody();
+        body.signature = await signBody(TEST_WALLET, body);
+
+        await expect(processAnchorRequest(body, RELAYER_CONFIG)).rejects.toThrow("network error");
+
+        // A retry of the same root after a failed submission must still be
+        // allowed — dedup means "already anchored", not "already attempted".
+        expect(RELAYER_CONFIG.anchorStore.has(body.merkleRoot)).toBe(false);
+    });
+
+    test("a different merkleRoot from the same device is unaffected", async () => {
+        const anchorFn = mockContractSuccess();
+        const bodyA = makeBody();
+        bodyA.signature = await signBody(TEST_WALLET, bodyA);
+        await processAnchorRequest(bodyA, RELAYER_CONFIG);
+
+        const bodyB = makeBody({
+            merkleRoot: ethers.keccak256(ethers.toUtf8Bytes("a-different-root")),
+        });
+        bodyB.signature = await signBody(TEST_WALLET, bodyB);
+
+        const second = await processAnchorRequest(bodyB, RELAYER_CONFIG);
+        expect(second.txHash).toBe(
+            "0xfeed000000000000000000000000000000000000000000000000000000000"
+        );
+        expect(anchorFn).toHaveBeenCalledTimes(2);
     });
 });

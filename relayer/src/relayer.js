@@ -20,6 +20,18 @@
 const { ethers } = require("ethers");
 const { buildDomain, verifyPayload, encodeMetadata } = require("./eip712");
 const { validateTimestamp } = require("./ntpClient");
+const { createAnchorStore } = require("./anchorStore");
+
+// Lazily-created module-level default store, shared across requests in this
+// process (and persisted to disk across restarts). Created on first use
+// rather than at require-time so requiring this module (e.g. from tests,
+// which always inject their own config.anchorStore) never touches the real
+// default store file.
+let defaultAnchorStore = null;
+function getDefaultAnchorStore() {
+    if (!defaultAnchorStore) defaultAnchorStore = createAnchorStore();
+    return defaultAnchorStore;
+}
 
 // ── Minimal ABI (only the anchor function) ────────────────────────────────────
 // WHY minimal ABI: we only call one function. A full ABI would be larger
@@ -33,7 +45,8 @@ const REGISTRY_ABI = [
  * Validate and process an incoming proof submission request.
  *
  * @param {object} body — Request body from POST /anchor
- * @param {object} config — { contractAddress, rpcUrl, relayerWallet, chainId }
+ * @param {object} config — { contractAddress, rpcUrl, relayerWallet, chainId, anchorStore? }
+ *   anchorStore defaults to a shared on-disk store (see anchorStore.js) if omitted.
  * @returns {Promise<object>} — { txHash, blockNumber, networkId, ntpValidation }
  */
 async function processAnchorRequest(body, config) {
@@ -68,6 +81,22 @@ async function processAnchorRequest(body, config) {
         throw Object.assign(
             new Error("merkleRoot must be a 0x-prefixed 32-byte hex string"),
             { statusCode: 400 }
+        );
+    }
+
+    // ── Step 2b: Reject a merkleRoot we've already anchored ───────────────────
+    // WHY: a POST /anchor body is a self-contained, validly signed request —
+    // replaying it verbatim (whether by accident, a client retry bug, or a
+    // captured request being resent) verifies again on every resubmission.
+    // Per-IP rate limiting (server.js) only bounds how fast that can happen,
+    // not whether it can — this is what actually stops it, by refusing to
+    // spend gas anchoring the same root twice. See anchorStore.js for why a
+    // local store rather than an on-chain events query.
+    const anchorStore = config.anchorStore || getDefaultAnchorStore();
+    if (anchorStore.has(body.merkleRoot)) {
+        throw Object.assign(
+            new Error(`merkleRoot ${body.merkleRoot} has already been anchored`),
+            { statusCode: 409 }
         );
     }
 
@@ -161,6 +190,11 @@ async function processAnchorRequest(body, config) {
     // We don't wait for more — on L2s, 1 confirmation is typically sufficient
     // for finality purposes (proven batch finality follows later on L1).
     const receipt = await tx.wait(1);
+
+    // WHY only after confirmation: dedup means "already anchored", not
+    // "already attempted" — a failed/crashed submission that never actually
+    // confirmed on-chain should still be retryable.
+    anchorStore.record(body.merkleRoot);
 
     // Notificar al social layer para indexar la prueba
     const socialApiUrl = process.env.SOCIAL_API_URL;

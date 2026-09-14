@@ -16,6 +16,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const { ethers } = require("ethers");
 const { processAnchorRequest } = require("./relayer");
+const { createAnchorStore } = require("./anchorStore");
 
 // ── Environment validation ────────────────────────────────────────────────────
 const REQUIRED_ENV = [
@@ -41,12 +42,19 @@ const CHAIN_ID = parseInt(process.env.CHAIN_ID, 10);
 const relayerWallet = new ethers.Wallet(process.env.RELAYER_PRIVATE_KEY);
 console.log(`[server] Relayer wallet: ${relayerWallet.address}`);
 
+// WHY explicit here (rather than relying on relayer.js's lazy default):
+// ANCHOR_STORE_PATH lets an operator point the replay-dedup store at a
+// persistent volume in containerized deployments, where the relayer's own
+// package directory may not survive a redeploy.
+const anchorStore = createAnchorStore(process.env.ANCHOR_STORE_PATH || undefined);
+
 // Relayer config passed to processAnchorRequest
 const relayerConfig = {
     contractAddress: process.env.CONTRACT_ADDRESS,
     rpcUrl: process.env.RPC_URL,
     relayerWallet,
     chainId: CHAIN_ID,
+    anchorStore,
 };
 
 // ── Middleware ─────────────────────────────────────────────────────────────────
