@@ -19,6 +19,7 @@ import {
     ActivityIndicator,
     Platform,
     Alert,
+    Share,
 } from "react-native";
 // import QRCode from "react-native-qrcode-svg"; // ToDo: re-enable after native build (also line 170 QRCode value={verifyUrl})
 import { getProofById } from "../db/database";

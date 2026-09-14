@@ -90,11 +90,19 @@ async function processAnchorRequest(body, config) {
         appVersion: body.appVersion,
     };
 
-    const { recovered } = verifyPayload(
+    const { valid, recovered } = verifyPayload(
         domain, payload, body.signature, body.deviceAddress
     );
+    if (!valid) {
+        throw Object.assign(
+            new Error(
+                `Signature does not match declared deviceAddress (recovered ${recovered}, expected ${body.deviceAddress})`
+            ),
+            { statusCode: 401 }
+        );
+    }
     const effectiveDeviceAddress = recovered;
-    console.log(`[relayer] Signer recovered: ${recovered} (device reported: ${body.deviceAddress})`);
+    console.log(`[relayer] Signer verified: ${recovered}`);
 
     // ── Step 4: Cross-validate timestamp against NTP ──────────────────────────
     // WHY: Device can self-report any timestamp. Our independent NTP check
